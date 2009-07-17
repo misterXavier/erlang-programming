@@ -15,9 +15,7 @@ loop() ->
       response(),
       loop();
     stop ->
-      mutex ! stop,
-      response(),
-      loop()
+      mutex ! stop
   end.
 
 response() ->
