@@ -15,7 +15,8 @@ start_children([{M, F, A, T} | ChildSpecList]) ->
     {'EXIT', _} ->
       start_children(ChildSpecList);
     Pid ->
-      [{Pid, {M, F, A, T}}|start_children(ChildSpecList)]
+      {Hour, Min, _} = time(),
+      [{Pid, {0, {Hour, Min}}, {M, F, A, T}}|start_children(ChildSpecList)]
   end.
 
 %% The loop of the supervisor waits in a receive clause for EXIT and stop messages.
@@ -23,13 +24,26 @@ start_children([{M, F, A, T} | ChildSpecList]) ->
 %% child, replacing its entry in the list of children stored in the ChildList variable:
 
 restart_child(Pid, ChildList, Reason) ->
-  {value, {Pid, {M, F, A, T}}} = lists:keysearch(Pid, 1, ChildList),
-  case {T, Reason} of
-    {transient, normal} ->
+  {value, {Pid, {Times, {Hour, Min}}, {M, F, A, T}}} = lists:keysearch(Pid, 1, ChildList),
+  if
+    {T, Reason} == {transient, normal} ->
       lists:keydelete(Pid,1,ChildList);
-    _ ->
-      NewPid = spawn_link(M,F,A),
-      [{NewPid, {M, F, A, T}}|lists:keydelete(Pid,1,ChildList)]
+    true ->
+      case time() of
+        {Hour, Min, _} ->
+          NewTimes = Times + 1,
+          NewHour = Hour, NewMin = Min;
+        {NewHour, NewMin, _} ->
+          NewTimes = 0
+      end,
+      if
+        NewTimes >= 5 ->
+          io:format('above treshold, nooot here'),
+          lists:keydelete(Pid,1,ChildList);
+        true ->
+          NewPid = spawn_link(M,F,A),
+          [{NewPid, {NewTimes, {NewHour, NewMin}}, {M, F, A, T}}|lists:keydelete(Pid,1,ChildList)]
+      end
   end.
 
 loop(ChildList) ->
